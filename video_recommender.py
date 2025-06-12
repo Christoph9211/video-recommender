@@ -62,10 +62,10 @@ if __name__ == "__main__":
     vectorizer, user_profile = build_user_profile(bookmarks)
 
     example_candidates = pd.DataFrame([
-        {"title": "Amirah Adara & Rebecca Volpetti", "url": "www.eporner.com/video-xmefJNVPrrF/amirah-adara-rebecca-volpetti/"},
-        {"title": "Amazing Young Lesbians", "url": "www.eporner.com/hd-porn/gbT1bBqMMIk/Amazing-Young-Lesbians/"},
+        {"title": "Pico C++ Projects", "url": "www.raspberrypi.com"},
+        {"title": "The Pico C++ Projects", "url": "www.raspberrypi.com"},
         {"title": "Advanced Pico C++ Projects", "url": "www.raspberrypi.com"},
-        {"title": "Full Video - Dyked - Nympho Tries To Study | Pornhub", "url": "www.pornhub.com/view_video.php?viewkey=ph5e6a8b5c23b0c"}
+        {"title": "Advanced Pico C++ Projects", "url": "www.raspberrypi.com"}
     ])
     example_candidates["description"] = ""
     example_candidates["url"] = ["", "", "", ""]
