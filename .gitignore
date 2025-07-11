@@ -1,3 +1,6 @@
 
 favorites_6_10_25.txt
 .venv
+.pyc
+/output
+__pycache__

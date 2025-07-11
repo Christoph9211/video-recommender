@@ -5,6 +5,7 @@ import requests
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
+from lxml import html
 
 
 def parse_bookmarks_from_file(bookmark_file_path: str) -> pd.DataFrame:
@@ -60,7 +61,7 @@ def build_user_profile(bookmarks: pd.DataFrame) -> tuple[TfidfVectorizer, np.nda
 
 
 def recommend_videos(
-    candidates: pd.DataFrame, vectorizer: TfidfVectorizer, user_profile: np.ndarray, top_n: int = 20
+    candidates: pd.DataFrame, vectorizer: TfidfVectorizer, user_profile: np.ndarray, top_n: int = 30
 ) -> pd.DataFrame:
     """
     Recommend videos based on their similarity to a user's profile.
@@ -85,9 +86,8 @@ def recommend_videos(
             print(e)
     return pd.DataFrame()
 
-
-def scrape_eporner_videos(query: str, max_results: int = 10) -> pd.DataFrame:
-    """Scrape Eporner search results for video titles and URLs."""
+def scrape_eporner_videos(query: str, max_results: int = 30) -> pd.DataFrame:
+    """Scrape Eporner using logic inspired by the Scrapy spider."""
     if not query:
         print("Query cannot be empty.")
         return pd.DataFrame()
@@ -102,25 +102,23 @@ def scrape_eporner_videos(query: str, max_results: int = 10) -> pd.DataFrame:
         )
     }
 
-    session = requests.Session()
-    requests.packages.urllib3.disable_warnings()
-
     try:
-        response = session.get(search_url, headers=headers, timeout=30, verify=False)
+        response = requests.get(search_url, headers=headers, timeout=15)
         response.raise_for_status()
     except requests.exceptions.RequestException as error:
         print(f"Error fetching videos: {error}")
         return pd.DataFrame()
 
-    soup = BeautifulSoup(response.text, "html.parser")
+    from lxml import html
+    tree = html.fromstring(response.content)
     video_data = []
 
-    for link in soup.select("div.mbunder p.mbtit a[href^='/video-']"):
+    for link in tree.xpath("//div[contains(@class, 'mbunder')]//p[contains(@class, 'mbtit')]/a[starts-with(@href, '/video-')]"):
         if len(video_data) >= max_results:
             break
 
         href = link.get("href")
-        title = link.get("title") or link.text.strip()
+        title = link.get("title") or (link.text or "").strip()
         if not href or not title:
             continue
 
@@ -128,89 +126,145 @@ def scrape_eporner_videos(query: str, max_results: int = 10) -> pd.DataFrame:
         if any(video["url"] == full_url for video in video_data):
             continue
 
-        video_data.append(
-            {
-                "title": title,
-                "url": full_url,
-                "source": "eporner",
-                "description": "",
-            }
-        )
+        video_data.append({
+            "title": title,
+            "url": full_url,
+            "source": "eporner",
+            "description": "",
+        })
 
     return pd.DataFrame(video_data)
 
-def scrape_hq_porner(query: str, max_results: int = 10) -> pd.DataFrame:
-    """Scrape HQ PornHub search results for video titles and URLs."""
-    search_url = f"https://www.hqporner.com/?q={query}"
+
+# def scrape_eporner_videos(query: str, max_results: int = 10) -> pd.DataFrame:
+#     """Scrape Eporner search results for video titles and URLs."""
+#     if not query:
+#         print("Query cannot be empty.")
+#         return pd.DataFrame()
+
+#     formatted_query = requests.utils.quote(query.replace(" ", "-"))
+#     search_url = f"https://www.eporner.com/search/{formatted_query}/"
+#     headers = {
+#         "User-Agent": (
+#             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+#             "AppleWebKit/537.36 (KHTML, like Gecko) "
+#             "Chrome/91.0.4472.124 Safari/537.36"
+#         )
+#     }
+
+#     session = requests.Session()
+#     requests.packages.urllib3.disable_warnings()
+
+#     try:
+#         response = session.get(search_url, headers=headers, timeout=30, verify=False)
+#         response.raise_for_status()
+#     except requests.exceptions.RequestException as error:
+#         print(f"Error fetching videos: {error}")
+#         return pd.DataFrame()
+
+#     soup = BeautifulSoup(response.text, "html.parser")
+#     video_data = []
+
+#     for link in soup.select("div.mbunder p.mbtit a[href^='/video-']"):
+#         if len(video_data) >= max_results:
+#             break
+
+#         href = link.get("href")
+#         title = link.get("title") or link.text.strip()
+#         if not href or not title:
+#             continue
+
+#         full_url = f"https://www.eporner.com{href}"
+#         if any(video["url"] == full_url for video in video_data):
+#             continue
+
+#         video_data.append(
+#             {
+#                 "title": title,
+#                 "url": full_url,
+#                 "source": "eporner",
+#                 "description": "",
+#             }
+#         )
+
+#     return pd.DataFrame(video_data)
+
+def scrape_hq_porner(query: str, max_results: int = 20) -> pd.DataFrame:
+    """Scrape HQPorner search results for video titles and URLs using XPath."""
+    # formatted_query = requests.utils.quote(query.replace(" ", "-"))
+    search_url = "https://hqporner.com/top/month"
 
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3"
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/58.0.3029.110 Safari/537.3"
+        )
     }
 
-    session = requests.Session()
-    requests.packages.urllib3.disable_warnings()
-
     try:
-        response = session.get(search_url, headers=headers, timeout=30, verify=False)
+        response = requests.get(search_url, headers=headers, timeout=15)
         response.raise_for_status()
-    except requests.exceptions.RequestException as error:
-        print(f"Error fetching videos: {error}")
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching videos: {e}")
         return pd.DataFrame()
 
-    soup = BeautifulSoup(response.text, "html.parser")
+    tree = html.fromstring(response.content)
     video_data = []
 
-    for link in soup.select("div.mbunder p.mbtit a[href^='/video-']"):
+    links = tree.xpath("//div[contains(@class, 'searchResult')]//a[starts-with(@href, '/video/')]")
+    for link in links:
         if len(video_data) >= max_results:
             break
 
         href = link.get("href")
-        title = link.get("title") or link.text.strip()
+        title = link.get("title") or (link.text or "").strip()
         if not href or not title:
             continue
 
-        full_url = f"https://www.hqporner.com{href}"
+        full_url = f"https://hqporner.com{href}"
         if any(video["url"] == full_url for video in video_data):
             continue
 
-        video_data.append(
-            {
-                "title": title,
-                "url": full_url,
-                "source": "hqporner",
-                "description": "",
-            }
-        )
-
+        video_data.append({
+            "title": title,
+            "url": full_url,
+            "source": "hqporner",
+            "description": "",
+        })
+        
     return pd.DataFrame(video_data)
 
-def scrape_porntrex_videos(query: str, max_results: int = 10) -> pd.DataFrame:
-    """Scrape Porntrex search results for video titles and URLs."""
-    search_url = f"https://www.porntrex.com/search/{query}/"
 
+def scrape_porntrex_videos(query: str, max_results: int = 10) -> pd.DataFrame:
+    """Scrape Porntrex search results for video titles and URLs using XPath."""
+    formatted_query = requests.utils.quote(query.replace(" ", ""))
+    url = f"https://www.porntrex.com/search/{formatted_query}/"
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3"
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/58.0.3029.110 Safari/537.3"
+        )
     }
 
-    session = requests.Session()
-    requests.packages.urllib3.disable_warnings()
-
-    try:    
-        response = session.get(search_url, headers=headers, timeout=30, verify=False)
+    try:
+        response = requests.get(url, headers=headers, timeout=15)
         response.raise_for_status()
     except requests.exceptions.RequestException as error:
         print(f"Error fetching videos: {error}")
         return pd.DataFrame()
 
-    soup = BeautifulSoup(response.text, "html.parser")
+    from lxml import html
+    tree = html.fromstring(response.content)
     video_data = []
 
-    for link in soup.select("div.mbunder p.mbtit a[href^='/video-']"):
+    for link in tree.xpath("//div[contains(@class, 'mbunder')]//p[contains(@class, 'mbtit')]/a[starts-with(@href, '/video-')]"):
         if len(video_data) >= max_results:
             break
 
         href = link.get("href")
-        title = link.get("title") or link.text.strip()
+        title = link.get("title") or (link.text or "").strip()
         if not href or not title:
             continue
 
@@ -218,26 +272,19 @@ def scrape_porntrex_videos(query: str, max_results: int = 10) -> pd.DataFrame:
         if any(video["url"] == full_url for video in video_data):
             continue
 
-        video_data.append(
-            {
-                "title": title,
-                "url": full_url,
-                "source": "porntrex",
-                "description": "",
-            }
-        )
+        video_data.append({
+            "title": title,
+            "url": full_url,
+            "source": "eporner",
+            "description": "",
+        })
 
-    if video_data:
-        return pd.DataFrame(video_data)
-    
+    return pd.DataFrame(video_data)
+
 
 if __name__ == "__main__":
     bookmark_file_path = "favorites_6_10_25.txt"
-    if bookmark_file_path is not None:
-        print(f"Using default bookmark file: {bookmark_file_path}")
-    else:
-        print("No default bookmark file found. Please provide a path to your bookmark .txt file.")
-        bookmark_file_path = input("Enter path to your bookmark .txt file: ").strip()
+    print(f"Using bookmark file: {bookmark_file_path}")
 
     bookmarks = parse_bookmarks_from_file(bookmark_file_path)
     if bookmarks.empty:
@@ -250,25 +297,31 @@ if __name__ == "__main__":
         exit()
 
     query = input("Enter a search query for new videos: ").strip()
+    scraped_candidates = []
     try:
-        scraped_candidates = [scrape_hq_porner(query, max_results=20), scrape_eporner_videos(query, max_results=30), scrape_porntrex_videos(query, max_results=20)]
+        scraped_candidates = [
+            # scrape_motherless_videos(query, max_results=10),
+            # scrape_xnxx_videos(query, max_results=20),
+            # scrape_hq_porner(query, max_results=20),
+            scrape_eporner_videos(query, max_results=30),
+            scrape_porntrex_videos(query, max_results=20)
+        ]
     except Exception as e:
         print(f"Error during scraping: {e}")
-        
-    # Combine the results from both sources
-    combined_scraped_candidates = pd.concat(scraped_candidates, ignore_index=True)
-    print(combined_scraped_candidates.columns)
+
+    scraped_candidates = [df for df in scraped_candidates if not df.empty]
+    if scraped_candidates:
+        combined_scraped_candidates = pd.concat(scraped_candidates, ignore_index=True)
+    else:
+        combined_scraped_candidates = pd.DataFrame()
+
     if combined_scraped_candidates.empty:
         print("No videos found from the web, falling back to example data.")
-        default_scraped_candidates = pd.DataFrame(
-            [
-                {"title": "Pico C++ Projects", "url": "https://www.raspberrypi.com/documentation/microcontrollers/cpp.html"},
-                {"title": "The Pico C++ Projects", "url": "https://projects.raspberrypi.org/en/projects/getting-started-with-pico"},
-                {"title": "Advanced Pico C++ Projects", "url": "https://www.tomshardware.com/how-to/raspberry-pi-pico-projects"},
-            ]
-        )
-        default_scraped_candidates["description"] = ""
-        default_scraped_candidates["source"] = "example"
+        combined_scraped_candidates = pd.DataFrame([
+            {"title": "Pico C++ Projects", "url": "https://www.raspberrypi.com/documentation/microcontrollers/cpp.html", "description": "", "source": "example"},
+            {"title": "The Pico C++ Projects", "url": "https://projects.raspberrypi.org/en/projects/getting-started-with-pico", "description": "", "source": "example"},
+            {"title": "Advanced Pico C++ Projects", "url": "https://www.tomshardware.com/how-to/raspberry-pi-pico-projects", "description": "", "source": "example"},
+        ])
 
     top_recommendations = recommend_videos(combined_scraped_candidates, vectorizer, user_profile, top_n=30)
     if top_recommendations.empty:
