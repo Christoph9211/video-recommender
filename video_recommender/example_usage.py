@@ -28,7 +28,7 @@ async def main():
     # Example 1: Search for videos on a specific site
     print("Example 1: Searching for 'tech' videos on eporner...")
     try:
-        df_search = await scraper.fetch(site='eporner', query='tech', max_results=10)
+        df_search = await scraper.fetch(site='eporner', query='lesbian', max_results=10)
         print(f"Found {len(df_search)} videos")
         if not df_search.empty:
             print(df_search[['title', 'source']].head())
@@ -82,7 +82,7 @@ async def main():
     # Example 4: Error handling for unsupported site
     print("Example 4: Testing error handling for unsupported site...")
     try:
-        df_error = await scraper.fetch(site='unsupported_site', query='test')
+        df_error = await scraper.fetch(site='unsupported_site', query='lesbian')
         print("This shouldn't be reached")
     except ValueError as e:
         print(f"Expected error: {e}")
@@ -98,7 +98,7 @@ async def main():
     for site in sites:
         try:
             logger.info(f"Attempting to fetch from {site}...")
-            df = await scraper.fetch(site=site, query='programming', max_results=5)
+            df = await scraper.fetch(site=site, query='lesbian', max_results=5)
             if not df.empty:
                 all_results.append(df)
                 logger.info(f"Successfully fetched {len(df)} videos from {site}")
@@ -136,7 +136,7 @@ async def main():
     fallback_scraper = Crawl4aiVideoScraper(settings=fallback_settings)
     
     try:
-        df_fallback = await fallback_scraper.fetch(site='xnxx', query='test', max_results=3)
+        df_fallback = await fallback_scraper.fetch(site='xnxx', query='lesbian', max_results=3)
         print(f"Fallback test completed: {len(df_fallback)} videos")
     except Exception as e:
         print(f"Fallback test failed (expected in placeholder): {e}")
