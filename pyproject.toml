@@ -14,5 +14,4 @@ dependencies = [
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["video_scrapper*"]
 exclude = ["output*"]
