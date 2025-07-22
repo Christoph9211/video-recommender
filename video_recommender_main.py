@@ -1,7 +1,7 @@
-import re
+# import re
 import pandas as pd
 from bs4 import BeautifulSoup
-import requests
+# import requests
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
@@ -13,13 +13,9 @@ from video_recommender.scrapers import Crawl4aiVideoScraper
 scraper = Crawl4aiVideoScraper()
 
 # Synchronous wrapper functions for the async scraper
-def scrape_eporner_videos(query: str, max_results: int = 30) -> pd.DataFrame:
+def scrape_eporner_videos(query: str, max_results: int = 50) -> pd.DataFrame:
     """Synchronous wrapper for Eporner video scraping using Crawl4AI."""
     return asyncio.run(scraper.fetch("eporner", query, max_results))
-
-def scrape_hqporner_videos(query: str, max_results: int = 20) -> pd.DataFrame:
-    """Synchronous wrapper for HQPorner video scraping using Crawl4AI."""
-    return asyncio.run(scraper.fetch("hqporner", query, max_results))
 
 def scrape_porntrex_videos(query: str, max_results: int = 10) -> pd.DataFrame:
     """Synchronous wrapper for Porntrex video scraping using Crawl4AI."""
@@ -32,10 +28,6 @@ def scrape_xnxx_videos(query: str, max_results: int = 20) -> pd.DataFrame:
 def scrape_motherless_videos(query: str, max_results: int = 10) -> pd.DataFrame:
     """Synchronous wrapper for Motherless video scraping using Crawl4AI."""
     return asyncio.run(scraper.fetch("motherless", query, max_results))
-
-def scrape_hq_porner(query: str, max_results: int = 20) -> pd.DataFrame:
-    """Alias for scrape_hqporner_videos for backward compatibility."""
-    return scrape_hqporner_videos(query, max_results)
 
 
 def parse_bookmarks_from_file(bookmark_file_path: str) -> pd.DataFrame:
@@ -84,14 +76,14 @@ def build_user_profile(bookmarks: pd.DataFrame) -> tuple[TfidfVectorizer, np.nda
         return None, None
 
     combined_text = bookmarks["title"] + " " + bookmarks["url"]
-    vectorizer = TfidfVectorizer(stop_words="english")
+    vectorizer = TfidfVectorizer()
     tfidf_matrix = vectorizer.fit_transform(combined_text)
     user_profile = np.asarray(tfidf_matrix.mean(axis=0)).reshape(1, -1)
     return vectorizer, user_profile
 
 
 def recommend_videos(
-    candidates: pd.DataFrame, vectorizer: TfidfVectorizer, user_profile: np.ndarray, top_n: int = 30
+    candidates: pd.DataFrame, vectorizer: TfidfVectorizer, user_profile: np.ndarray, top_n: int = 20
 ) -> pd.DataFrame:
     """
     Recommend videos based on their similarity to a user's profile.
@@ -136,7 +128,7 @@ if __name__ == "__main__":
         logging.basicConfig(level=logging.INFO,
                           format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     
-    bookmark_file_path = "favorites_6_10_25.txt"
+    bookmark_file_path = "Reading_List.html"
     print(f"Using bookmark file: {bookmark_file_path}")
 
     bookmarks = parse_bookmarks_from_file(bookmark_file_path)
@@ -153,11 +145,10 @@ if __name__ == "__main__":
     scraped_candidates = []
     try:
         scraped_candidates = [
-            scrape_motherless_videos(query, max_results=10),
-            scrape_xnxx_videos(query, max_results=20),
-            scrape_hq_porner(query, max_results=20),
-            scrape_eporner_videos(query, max_results=30),
-            scrape_porntrex_videos(query, max_results=20)
+            # scrape_motherless_videos(query, max_results=10),
+            # scrape_xnxx_videos(query, max_results=20),
+            scrape_eporner_videos(query, max_results=100),
+            # scrape_porntrex_videos(query, max_results=20)
         ]
     except Exception as e:
         logger.error(f"Error during scraping: {e}")
