@@ -4,8 +4,10 @@ from bs4 import BeautifulSoup
 # import requests
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+from sentence_transformers import SentenceTransformer
 import numpy as np
 from lxml import html
+from typing import Dict, Optional, Tuple
 import asyncio
 from video_recommender.scrapers import Crawl4aiVideoScraper
 
@@ -82,6 +84,58 @@ def build_user_profile(bookmarks: pd.DataFrame) -> tuple[TfidfVectorizer, np.nda
     return vectorizer, user_profile
 
 
+def _encode_domains(domains: pd.Series, mapping: Optional[Dict[str, int]] = None) -> Tuple[np.ndarray, Dict[str, int]]:
+    """One-hot encode domain strings."""
+    if mapping is None:
+        unique = sorted(domains.unique())
+        mapping = {d: i for i, d in enumerate(unique)}
+
+    vectors = np.zeros((len(domains), len(mapping)))
+    for i, d in enumerate(domains):
+        idx = mapping.get(d)
+        if idx is not None:
+            vectors[i, idx] = 1.0
+    return vectors, mapping
+
+
+def build_user_embedding_profile(
+    bookmarks: pd.DataFrame,
+    model_name: str = "all-MiniLM-L6-v2",
+) -> tuple[Optional[SentenceTransformer], Optional[Dict[str, int]], Optional[np.ndarray]]:
+    """Create a user profile using sentence embeddings and domain features."""
+    if bookmarks.empty:
+        return None, None, None
+
+    model = SentenceTransformer(model_name)
+    texts = (bookmarks["title"].fillna("") + " " + bookmarks["description"].fillna(""))
+    embeddings = model.encode(list(texts), convert_to_numpy=True)
+
+    domain_vecs, mapping = _encode_domains(bookmarks["source"].fillna("unknown"))
+    combined = np.hstack([embeddings, domain_vecs])
+    profile = combined.mean(axis=0, keepdims=True)
+    return model, mapping, profile
+
+
+def recommend_videos_with_embeddings(
+    candidates: pd.DataFrame,
+    model: SentenceTransformer,
+    domain_mapping: Dict[str, int],
+    user_profile: np.ndarray,
+    top_n: int = 30,
+) -> pd.DataFrame:
+    """Recommend videos using sentence embeddings and domain features."""
+    if candidates.empty or model is None or user_profile is None:
+        return pd.DataFrame()
+
+    texts = (candidates["title"].fillna("") + " " + candidates["description"].fillna(""))
+    embeddings = model.encode(list(texts), convert_to_numpy=True)
+    domain_vecs, _ = _encode_domains(candidates["source"].fillna("unknown"), mapping=domain_mapping)
+    combined = np.hstack([embeddings, domain_vecs])
+    scores = cosine_similarity(combined, user_profile).flatten()
+    candidates["relevance_score"] = scores
+    return candidates.nlargest(top_n, "relevance_score")
+
+
 def recommend_videos(
     candidates: pd.DataFrame, vectorizer: TfidfVectorizer, user_profile: np.ndarray, top_n: int = 20
 ) -> pd.DataFrame:
@@ -137,6 +191,8 @@ if __name__ == "__main__":
         exit()
 
     vectorizer, user_profile = build_user_profile(bookmarks)
+    model, domain_map, emb_profile = build_user_embedding_profile(bookmarks)
+
     if vectorizer is None or user_profile is None:
         print("Could not create a user profile. Exiting.")
         exit()
@@ -168,9 +224,17 @@ if __name__ == "__main__":
         ])
 
     top_recommendations = recommend_videos(combined_scraped_candidates, vectorizer, user_profile, top_n=30)
-    if top_recommendations.empty:
+    emb_recs = recommend_videos_with_embeddings(
+        combined_scraped_candidates, model, domain_map, emb_profile, top_n=30
+    )
+
+    if top_recommendations.empty and emb_recs.empty:
         print("No recommendations could be made.")
     else:
-        print("\nTop Recommendations:\n")
+        print("\nTop Recommendations (TF-IDF):\n")
         for _, row in top_recommendations.iterrows():
+            print(f"{row['title']} ({row['url']}) — Score: {row['relevance_score']:.3f}")
+
+        print("\nTop Recommendations (Embeddings):\n")
+        for _, row in emb_recs.iterrows():
             print(f"{row['title']} ({row['url']}) — Score: {row['relevance_score']:.3f}")
