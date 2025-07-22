@@ -5,7 +5,7 @@ import requests
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
-from urllib.parse import urlparse
+from lxml import html
 import asyncio
 from video_recommender.scrapers import Crawl4aiVideoScraper
 
@@ -13,7 +13,7 @@ from video_recommender.scrapers import Crawl4aiVideoScraper
 scraper = Crawl4aiVideoScraper()
 
 # Synchronous wrapper functions for the async scraper
-def scrape_eporner_videos(query: str, max_results: int = 10) -> pd.DataFrame:
+def scrape_eporner_videos(query: str, max_results: int = 30) -> pd.DataFrame:
     """Synchronous wrapper for Eporner video scraping using Crawl4AI."""
     return asyncio.run(scraper.fetch("eporner", query, max_results))
 
@@ -33,9 +33,9 @@ def scrape_motherless_videos(query: str, max_results: int = 10) -> pd.DataFrame:
     """Synchronous wrapper for Motherless video scraping using Crawl4AI."""
     return asyncio.run(scraper.fetch("motherless", query, max_results))
 
-def scrape_hq_porner(query: str = None, max_results: int = 20) -> pd.DataFrame:
-    """Synchronous wrapper for HQPorner video scraping using Crawl4AI."""
-    return asyncio.run(scraper.fetch("hqporner", query, max_results))
+def scrape_hq_porner(query: str, max_results: int = 20) -> pd.DataFrame:
+    """Alias for scrape_hqporner_videos for backward compatibility."""
+    return scrape_hqporner_videos(query, max_results)
 
 
 def parse_bookmarks_from_file(bookmark_file_path: str) -> pd.DataFrame:
@@ -45,20 +45,24 @@ def parse_bookmarks_from_file(bookmark_file_path: str) -> pd.DataFrame:
             content = file.read()
     except FileNotFoundError:
         return pd.DataFrame()
+    except Exception as e:
+        return pd.DataFrame()
 
     soup = BeautifulSoup(content, "html.parser")
     bookmarks = []
-    for a_tag in soup.find_all("a"):
-        title = a_tag.text.strip() if a_tag.text else "No Title"
-        url = a_tag.get("href", "").strip()
-        domain = urlparse(url).netloc if url else "Unknown Source"
+    for link in soup.find_all("a"):
+        title = link.text.strip() if link.text else "No Title"
+        url = link.get("href", "").strip()
+
+        # Robust domain extraction
+        domain = url.split("/")[0] if url else "Unknown Source"
 
         bookmarks.append(
             {
                 "title": title,
                 "url": url,
                 "source": domain,
-                "description": "",
+                "description": "",  # Placeholder, can be filled with metadata/scraping
             }
         )
 
@@ -66,42 +70,72 @@ def parse_bookmarks_from_file(bookmark_file_path: str) -> pd.DataFrame:
 
 
 def build_user_profile(bookmarks: pd.DataFrame) -> tuple[TfidfVectorizer, np.ndarray]:
-    """Build a user profile based on their bookmarks."""
+    """
+    Build a user profile based on their bookmarks.
+
+    Parameters:
+    bookmarks (pd.DataFrame): DataFrame of bookmarks with "title" and "url" columns.
+
+    Returns:
+    vectorizer (TfidfVectorizer): Vectorizer used to create the user profile.
+    user_profile (np.ndarray): User profile vector.
+    """
     if bookmarks.empty:
         return None, None
 
-    # Combine title and url into a single string
-    combined_text = bookmarks["title"].astype(str) + " " + bookmarks["url"].astype(str)
-
-    # Create a TF-IDF vectorizer
+    combined_text = bookmarks["title"] + " " + bookmarks["url"]
     vectorizer = TfidfVectorizer(stop_words="english")
-
-    # Fit the vectorizer to the data and transform it
     tfidf_matrix = vectorizer.fit_transform(combined_text)
-
-    # Calculate the mean TF-IDF vector as the user profile
     user_profile = np.asarray(tfidf_matrix.mean(axis=0)).reshape(1, -1)
-
     return vectorizer, user_profile
 
 
-def recommend_videos(candidates: pd.DataFrame, tfidf_vectorizer: TfidfVectorizer, user_vector: np.ndarray, top_n: int = 20) -> pd.DataFrame:
-    if candidates.empty or tfidf_vectorizer is None or user_vector is None:
-        return pd.DataFrame()
+def recommend_videos(
+    candidates: pd.DataFrame, vectorizer: TfidfVectorizer, user_profile: np.ndarray, top_n: int = 30
+) -> pd.DataFrame:
+    """
+    Recommend videos based on their similarity to a user's profile.
 
-    try:
-        candidate_texts = candidates["title"] + " " + candidates["url"]
-        candidate_vectors = tfidf_vectorizer.transform(candidate_texts)
-        similarity_scores = cosine_similarity(candidate_vectors, user_vector).flatten()
-        candidates["relevance_score"] = similarity_scores
-        return candidates.nlargest(top_n, "relevance_score")
-    except Exception as error:
-        print(f"Error in recommending videos: {error}")
-        return pd.DataFrame()
+    Parameters:
+    candidates (pd.DataFrame): DataFrame of candidate videos with "title" and "url" columns.
+    vectorizer (TfidfVectorizer): Vectorizer fitted on user's bookmarks.
+    user_profile (np.ndarray): Vector representation of the user's interests.
+    top_n (int, optional): Number of top recommendations to return. Defaults to 10.
+
+    Returns:
+    pd.DataFrame: DataFrame of top recommended videos sorted by relevance score.
+    """
+    if not candidates.empty and vectorizer is not None and user_profile is not None:
+        text = candidates["title"] + " " + candidates["url"]
+        try:
+            tfidf_candidates = vectorizer.transform(text)
+            scores = cosine_similarity(tfidf_candidates, user_profile).flatten()
+            candidates["relevance_score"] = scores
+            return candidates.nlargest(top_n, "relevance_score")
+        except Exception as e:
+            print(e)
+    return pd.DataFrame()
 
 
+import logging
+import argparse
+
+# Configure logger for this module  
+logger = logging.getLogger(__name__)
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Video Recommender")
+    parser.add_argument('--verbose', action='store_true', help='Enable verbose debug output')
+    args = parser.parse_args()
+
+    # Configure logging level based on verbosity flag
+    if args.verbose:
+        logging.basicConfig(level=logging.DEBUG, 
+                          format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    else:
+        logging.basicConfig(level=logging.INFO,
+                          format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    
     bookmark_file_path = "favorites_6_10_25.txt"
     print(f"Using bookmark file: {bookmark_file_path}")
 
@@ -122,11 +156,11 @@ if __name__ == "__main__":
             scrape_motherless_videos(query, max_results=10),
             scrape_xnxx_videos(query, max_results=20),
             scrape_hq_porner(query, max_results=20),
-            scrape_eporner_videos(query, max_results=20),
-            scrape_porntrex_videos(query, max_results=20),
+            scrape_eporner_videos(query, max_results=30),
+            scrape_porntrex_videos(query, max_results=20)
         ]
     except Exception as e:
-        print(f"Error during scraping: {e}")
+        logger.error(f"Error during scraping: {e}")
 
     scraped_candidates = [df for df in scraped_candidates if not df.empty]
     if scraped_candidates:
