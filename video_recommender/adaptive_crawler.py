@@ -2,6 +2,8 @@ from dataclasses import dataclass
 from typing import List, Dict, Optional
 import asyncio
 from bs4 import BeautifulSoup
+import aiohttp
+from urllib.parse import urlparse
 
 @dataclass
 class AdaptiveConfig:
@@ -31,27 +33,27 @@ class SeedingConfig:
     score_threshold: float = 0.4
 
 class AdaptiveCrawler:
-    """Simplified adaptive crawler using in-memory HTML for demonstration."""
+    """Adaptive crawler that fetches and parses real HTML pages for video links."""
     def __init__(self, config: Optional[AdaptiveConfig] = None):
         self.config = config or AdaptiveConfig()
 
-    async def digest(self, start_url: str, query: str) -> Dict[str, List[Dict[str, str]]]:
-        """Return simulated crawl results with video titles and URLs."""
-        await asyncio.sleep(0.1)
-        sample_html = """
-        <html><body>
-        <a href='https://videos.example.com/1'>Example Video 1</a>
-        <a href='https://videos.example.com/2'>Example Video 2</a>
-        <a href='https://videos.example.com/3'>Example Video 3</a>
-        </body></html>
-        """
-        soup = BeautifulSoup(sample_html, "html.parser")
+    async def fetch_html(self, url: str) -> str:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                return await response.text()
+
+    async def digest(self, url: str, query: str) -> Dict[str, List[Dict[str, str]]]:
+        """Fetch the page and extract video links."""
+        html = await self.fetch_html(url)
+        soup = BeautifulSoup(html, "html.parser")
         videos = []
-        for tag in soup.find_all("a"):
-            title = tag.text.strip()
-            url = tag.get("href", "")
-            if title and url:
-                videos.append({"title": title, "url": url})
+        # Find all video blocks
+        for mbunder in soup.select("div.mbunder p.mbtit a"):
+            title = mbunder.text.strip()
+            href = mbunder.get("href", "")
+            if title and href and href.startswith("/video-"):
+                full_url = f"https://www.eporner.com{href}"
+                videos.append({"title": title, "url": full_url})
         return {"videos": videos}
 
 class AsyncUrlSeeder:

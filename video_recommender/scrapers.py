@@ -13,7 +13,7 @@ from urllib.parse import quote
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from crawl4ai_settings import get_crawl4ai_config
+from crawl4ai_settings import get_crawl4ai_config, CRAWL4AI_DEFAULTS
 
 
 # Configure logger for this module
@@ -102,6 +102,7 @@ class Crawl4aiVideoScraper:
             settings: Optional dictionary of crawler settings. If None, uses defaults from crawl4ai_settings.
         """
         self.settings = settings or get_crawl4ai_config()
+        settings = CRAWL4AI_DEFAULTS.copy()
         self._site_pipelines = {
             'eporner': self._get_eporner_pipeline,
             'hqporner': self._get_hqporner_pipeline,
@@ -237,21 +238,14 @@ class Crawl4aiVideoScraper:
     
     async def _simulate_crawl4ai_flow(self, flow_def: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Simulate Crawl4AI flow execution with enhanced error handling - placeholder for actual implementation.
-        
-        In a real implementation, this would use Crawl4AI's async crawler with:
-        - Proper user agent rotation
-        - Request headers customization
-        - Cookie handling
-        - JavaScript rendering if needed
-        - Response validation
-        
+        Execute Crawl4AI flow using AdaptiveCrawler and return results.
+
         Args:
             flow_def: Flow definition dictionary
-            
+
         Returns:
             Dictionary with scraped video data
-            
+
         Raises:
             Exception: Various network, parsing, or validation errors
         """
@@ -261,9 +255,19 @@ class Crawl4aiVideoScraper:
                 f"user_agent={flow_def.get('user_agent', 'default')[:50]}..."
             )
 
-            from .adaptive_crawler import AdaptiveCrawler, AdaptiveConfig
+            # Import AdaptiveCrawler and AdaptiveConfig from the local module
+            from video_recommender.adaptive_crawler import AdaptiveCrawler, AdaptiveConfig
 
-            crawler = AdaptiveCrawler(AdaptiveConfig())
+            # Prepare AdaptiveConfig with custom settings if needed
+            config = AdaptiveConfig(
+                confidence_threshold=flow_def.get('config', {}).get('confidence_threshold', 0.7),
+                max_depth=flow_def.get('config', {}).get('max_depth', 5),
+                max_pages=flow_def.get('config', {}).get('max_pages', 20),
+                strategy=flow_def.get('config', {}).get('strategy', 'statistical')
+            )
+
+            crawler = AdaptiveCrawler(config)
+            # Pass both URL and query to the digest method
             results = await crawler.digest(flow_def.get('url', ''), flow_def.get('query', ''))
 
             results.update({
@@ -276,7 +280,7 @@ class Crawl4aiVideoScraper:
             return results
 
         except Exception as e:
-            logger.debug(f"Simulated crawl4ai error: {e}")
+            logger.debug(f"Crawl4AI error: {e}")
             raise
     
     def _convert_to_dataframe(self, results: Dict[str, Any], source: str) -> pd.DataFrame:
