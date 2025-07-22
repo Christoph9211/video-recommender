@@ -5,9 +5,14 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "bs4>=0.0.2",
+    "crawl4ai>=0.7.1",
     "numpy>=2.2.6",
     "pandas>=2.3.0",
     "requests>=2.32.4",
     "scikit-learn>=1.7.0",
 ]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["video_scrapper*"]
+exclude = ["output*"]
