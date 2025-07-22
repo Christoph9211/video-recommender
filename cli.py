@@ -15,11 +15,11 @@ from video_recommender_main import (
     parse_bookmarks_from_file, 
     build_user_profile, 
     recommend_videos,
-    scrape_motherless_videos,
-    scrape_xnxx_videos,
-    scrape_hq_porner,
+    # scrape_motherless_videos,
+    # scrape_xnxx_videos,
+    # scrape_hq_porner,
     scrape_eporner_videos,
-    scrape_porntrex_videos
+    # scrape_porntrex_videos
 )
 
 
@@ -66,11 +66,11 @@ def scrape_all_sites(query: str, verbose: bool = False) -> pd.DataFrame:
     
     # Define scraping functions with their limits
     scrapers = [
-        ("Motherless", scrape_motherless_videos, 10),
-        ("XNXX", scrape_xnxx_videos, 20),
-        ("HQPorner", scrape_hq_porner, 20),
-        ("Eporner", scrape_eporner_videos, 30),
-        ("Porntrex", scrape_porntrex_videos, 20)
+        # ("Motherless", scrape_motherless_videos, 10),
+        # ("XNXX", scrape_xnxx_videos, 20),
+        # ("HQPorner", scrape_hq_porner, 20),
+        ("Eporner", scrape_eporner_videos, 50),
+        # ("Porntrex", scrape_porntrex_videos, 20)
     ]
     
     scraped_results = []

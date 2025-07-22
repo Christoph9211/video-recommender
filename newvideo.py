@@ -102,7 +102,7 @@ def recommend_videos(candidates: pd.DataFrame, tfidf_vectorizer: TfidfVectorizer
 
 
 if __name__ == "__main__":
-    bookmark_file_path = "favorites_6_10_25.txt"
+    bookmark_file_path = "Reading_List.html"
     print(f"Using bookmark file: {bookmark_file_path}")
 
     bookmarks = parse_bookmarks_from_file(bookmark_file_path)
