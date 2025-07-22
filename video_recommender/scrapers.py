@@ -256,34 +256,25 @@ class Crawl4aiVideoScraper:
             Exception: Various network, parsing, or validation errors
         """
         try:
-            # Log the configuration being used
-            logger.debug(f"Crawl4AI config: site={flow_def.get('site')}, "
-                        f"user_agent={flow_def.get('user_agent', 'default')[:50]}...")
-            
-            # Simulate network delay
-            await asyncio.sleep(0.1)
-            
-            # In real implementation, this is where Crawl4AI would:
-            # 1. Make HTTP request with configured settings
-            # 2. Handle redirects and cookies
-            # 3. Parse HTML/JavaScript if needed
-            # 4. Extract data using CSS selectors
-            # 5. Validate and format results
-            
-            # For now, simulate occasional failures and empty results
-            import random
-            if random.random() < 0.1:  # 10% chance of simulated failure
-                raise Exception("Simulated network error")
-            
-            # Most of the time return empty results (since this is placeholder)
-            return {
-                'videos': [],
-                'total_found': 0,
+            logger.debug(
+                f"Crawl4AI config: site={flow_def.get('site')}, "
+                f"user_agent={flow_def.get('user_agent', 'default')[:50]}..."
+            )
+
+            from .adaptive_crawler import AdaptiveCrawler, AdaptiveConfig
+
+            crawler = AdaptiveCrawler(AdaptiveConfig())
+            results = await crawler.digest(flow_def.get('url', ''), flow_def.get('query', ''))
+
+            results.update({
+                'total_found': len(results.get('videos', [])),
                 'site': flow_def.get('site', 'unknown'),
                 'url': flow_def.get('url', ''),
                 'success': True
-            }
-            
+            })
+
+            return results
+
         except Exception as e:
             logger.debug(f"Simulated crawl4ai error: {e}")
             raise
